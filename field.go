@@ -1,6 +1,7 @@
 package iso8583
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"strconv"
@@ -73,7 +74,7 @@ func (n *Numeric) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
 	}
 
 	if len(val) > length {
-		return nil, errors.New(fmt.Sprintf(ErrValueTooLong, "Numeric", length, len(val)))
+		return nil, fmt.Errorf(ErrValueTooLong, "Numeric", length, len(val))
 	}
 	if len(val) < length {
 		val = append([]byte(strings.Repeat("0", length-len(val))), val...)
@@ -124,28 +125,27 @@ func (n *Numeric) Load(raw []byte, encoder, lenEncoder, length int) (int, error)
 // An Alphanumeric contains alphanumeric value in fix length. The only
 // supportted encoder is ascii. Length is required for marshalling and
 // unmarshalling.
-type Alphanumeric struct {
-	Value string
-}
+type Alphanumeric string
 
 // NewAlphanumeric create new Alphanumeric field
 func NewAlphanumeric(val string) *Alphanumeric {
-	return &Alphanumeric{Value: val}
+	a := Alphanumeric(val)
+	return &a
 }
 
 // IsEmpty check Alphanumeric field for empty value
 func (a *Alphanumeric) IsEmpty() bool {
-	return len(a.Value) == 0
+	return len(*a) == 0
 }
 
 // Bytes encode Alphanumeric field to bytes
 func (a *Alphanumeric) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
-	val := []byte(a.Value)
+	val := []byte(*a)
 	if length == -1 {
 		return nil, errors.New(ErrMissingLength)
 	}
 	if len(val) > length {
-		return nil, errors.New(fmt.Sprintf(ErrValueTooLong, "Alphanumeric", length, len(val)))
+		return nil, fmt.Errorf(ErrValueTooLong, "Alphanumeric", length, len(val))
 	}
 	if len(val) < length {
 		val = append([]byte(strings.Repeat(" ", length-len(val))), val...)
@@ -161,7 +161,7 @@ func (a *Alphanumeric) Load(raw []byte, encoder, lenEncoder, length int) (int, e
 	if len(raw) < length {
 		return 0, errors.New(ErrBadRaw)
 	}
-	a.Value = string(raw[:length])
+	*a = Alphanumeric(string(raw[:length]))
 	return length, nil
 }
 
@@ -191,12 +191,21 @@ func (b *Binary) Bytes(encoder, lenEncoder, l int) ([]byte, error) {
 		return nil, errors.New(ErrMissingLength)
 	}
 	if len(b.Value) > length {
-		return nil, errors.New(fmt.Sprintf(ErrValueTooLong, "Binary", length, len(b.Value)))
+		return nil, fmt.Errorf(ErrValueTooLong, "Binary", length, len(b.Value))
 	}
 	if len(b.Value) < length {
 		return append(b.Value, make([]byte, length-len(b.Value))...), nil
 	}
 	return b.Value, nil
+}
+
+// MarshalJSON is used for formatting the JSON representation of this field.
+func (b *Binary) MarshalJSON() ([]byte, error) {
+	// TODO: use encoder, length
+	if b.Value == nil {
+		return []byte(`""`), nil
+	}
+	return []byte(`"` + base64.URLEncoding.EncodeToString(b.Value) + `"`), nil
 }
 
 // Load decode Binary field from bytes
@@ -230,7 +239,7 @@ func (l *Llvar) IsEmpty() bool {
 // Bytes encode Llvar field to bytes
 func (l *Llvar) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
 	if length != -1 && len(l.Value) > length {
-		return nil, errors.New(fmt.Sprintf(ErrValueTooLong, "Llvar", length, len(l.Value)))
+		return nil, fmt.Errorf(ErrValueTooLong, "Llvar", length, len(l.Value))
 	}
 	if encoder != ASCII {
 		return nil, errors.New(ErrInvalidEncoder)
@@ -256,6 +265,15 @@ func (l *Llvar) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
 		return nil, errors.New(ErrInvalidLengthEncoder)
 	}
 	return append(lenVal, l.Value...), nil
+}
+
+// MarshalJSON is used for formatting the JSON representation of this field.
+func (l *Llvar) MarshalJSON() ([]byte, error) {
+	// TODO: use encoder, length
+	if l.Value == nil {
+		return []byte(`""`), nil
+	}
+	return []byte(`"` + base64.URLEncoding.EncodeToString(l.Value[2:]) + `"`), nil
 }
 
 // Load decode Llvar field from bytes
@@ -296,25 +314,24 @@ func (l *Llvar) Load(raw []byte, encoder, lenEncoder, length int) (read int, err
 // A Llnumeric contains numeric value only in non-fix length, contains length in first 2 symbols. It holds numeric
 // value as a string. Supportted encoder are ascii, bcd and rbcd. Length is
 // required for marshalling and unmarshalling.
-type Llnumeric struct {
-	Value string
-}
+type Llnumeric string
 
 // NewLlnumeric create new Llnumeric field
 func NewLlnumeric(val string) *Llnumeric {
-	return &Llnumeric{val}
+	l := Llnumeric(val)
+	return &l
 }
 
 // IsEmpty check Llnumeric field for empty value
 func (l *Llnumeric) IsEmpty() bool {
-	return len(l.Value) == 0
+	return len(*l) == 0
 }
 
 // Bytes encode Llnumeric field to bytes
 func (l *Llnumeric) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
-	raw := []byte(l.Value)
+	raw := []byte(*l)
 	if length != -1 && len(raw) > length {
-		return nil, errors.New(fmt.Sprintf(ErrValueTooLong, "Llnumeric", length, len(raw)))
+		return nil, fmt.Errorf(ErrValueTooLong, "Llnumeric", length, len(raw))
 	}
 
 	val := raw
@@ -379,7 +396,7 @@ func (l *Llnumeric) Load(raw []byte, encoder, lenEncoder, length int) (read int,
 		if len(raw) < (read + contentLen) {
 			return 0, errors.New(ErrBadRaw)
 		}
-		l.Value = string(raw[read : read+contentLen])
+		*l = Llnumeric(string(raw[read : read+contentLen]))
 		read += contentLen
 	case rBCD:
 		fallthrough
@@ -388,7 +405,7 @@ func (l *Llnumeric) Load(raw []byte, encoder, lenEncoder, length int) (read int,
 		if len(raw) < (read + bcdLen) {
 			return 0, errors.New(ErrBadRaw)
 		}
-		l.Value = string(bcdl2Ascii(raw[read:read+bcdLen], contentLen))
+		*l = Llnumeric(string(bcdl2Ascii(raw[read:read+bcdLen], contentLen)))
 		read += bcdLen
 	default:
 		return 0, errors.New(ErrInvalidEncoder)
@@ -397,30 +414,29 @@ func (l *Llnumeric) Load(raw []byte, encoder, lenEncoder, length int) (read int,
 }
 
 // Lllvar contains bytes in non-fixed length field, first 3 symbols of field contains length
-type Lllvar struct {
-	Value []byte
-}
+type Lllvar []byte
 
 // NewLllvar create new Lllvar field
 func NewLllvar(val []byte) *Lllvar {
-	return &Lllvar{val}
+	l := Lllvar(val)
+	return &l
 }
 
 // IsEmpty check Lllvar field for empty value
 func (l *Lllvar) IsEmpty() bool {
-	return len(l.Value) == 0
+	return len(*l) == 0
 }
 
 // Bytes encode Lllvar field to bytes
 func (l *Lllvar) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
-	if length != -1 && len(l.Value) > length {
-		return nil, errors.New(fmt.Sprintf(ErrValueTooLong, "Lllvar", length, len(l.Value)))
+	if length != -1 && len(*l) > length {
+		return nil, fmt.Errorf(ErrValueTooLong, "Lllvar", length, len(*l))
 	}
 	if encoder != ASCII {
 		return nil, errors.New(ErrInvalidEncoder)
 	}
 
-	lenStr := fmt.Sprintf("%03d", len(l.Value))
+	lenStr := fmt.Sprintf("%03d", len(*l))
 	contentLen := []byte(lenStr)
 	var lenVal []byte
 	switch lenEncoder {
@@ -439,7 +455,7 @@ func (l *Lllvar) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
 	default:
 		return nil, errors.New(ErrInvalidLengthEncoder)
 	}
-	return append(lenVal, l.Value...), nil
+	return append(lenVal, (*l)...), nil
 }
 
 // Load decode Lllvar field from bytes
@@ -468,7 +484,7 @@ func (l *Lllvar) Load(raw []byte, encoder, lenEncoder, length int) (read int, er
 		return 0, errors.New(ErrBadRaw)
 	}
 	// parse body:
-	l.Value = raw[read : read+contentLen]
+	*l = Lllvar(raw[read : read+contentLen])
 	read += contentLen
 	if encoder != ASCII {
 		return 0, errors.New(ErrInvalidEncoder)
@@ -480,25 +496,24 @@ func (l *Lllvar) Load(raw []byte, encoder, lenEncoder, length int) (read int, er
 // A Lllnumeric contains numeric value only in non-fix length, contains length in first 3 symbols. It holds numeric
 // value as a string. Supportted encoder are ascii, bcd and rbcd. Length is
 // required for marshalling and unmarshalling.
-type Lllnumeric struct {
-	Value string
-}
+type Lllnumeric string
 
 // NewLllnumeric create new Lllnumeric field
 func NewLllnumeric(val string) *Lllnumeric {
-	return &Lllnumeric{val}
+	l := Lllnumeric(val)
+	return &l
 }
 
 // IsEmpty check Lllnumeric field for empty value
 func (l *Lllnumeric) IsEmpty() bool {
-	return len(l.Value) == 0
+	return len(*l) == 0
 }
 
 // Bytes encode Lllnumeric field to bytes
 func (l *Lllnumeric) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
-	raw := []byte(l.Value)
+	raw := []byte(*l)
 	if length != -1 && len(raw) > length {
-		return nil, errors.New(fmt.Sprintf(ErrValueTooLong, "Lllnumeric", length, len(raw)))
+		return nil, fmt.Errorf(ErrValueTooLong, "Lllnumeric", length, len(raw))
 	}
 
 	val := raw
@@ -563,7 +578,7 @@ func (l *Lllnumeric) Load(raw []byte, encoder, lenEncoder, length int) (read int
 		if len(raw) < (read + contentLen) {
 			return 0, errors.New(ErrBadRaw)
 		}
-		l.Value = string(raw[read : read+contentLen])
+		*l = Lllnumeric(string(raw[read : read+contentLen]))
 		read += contentLen
 	case rBCD:
 		fallthrough
@@ -572,7 +587,7 @@ func (l *Lllnumeric) Load(raw []byte, encoder, lenEncoder, length int) (read int
 		if len(raw) < (read + bcdLen) {
 			return 0, errors.New(ErrBadRaw)
 		}
-		l.Value = string(bcdl2Ascii(raw[read:read+bcdLen], contentLen))
+		*l = Lllnumeric(string(bcdl2Ascii(raw[read:read+bcdLen], contentLen)))
 		read += bcdLen
 	default:
 		return 0, errors.New(ErrInvalidEncoder)

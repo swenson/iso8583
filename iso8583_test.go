@@ -2,6 +2,7 @@ package iso8583
 
 import (
 	"bytes"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -159,7 +160,8 @@ func TestDecode(t *testing.T) {
 	}
 
 	// set field 120 value to empty string
-	iso.Data.(*TestISO).F120.Value = ""
+	f120 := Lllnumeric("")
+	iso.Data.(*TestISO).F120 = &f120
 
 	iso.SecondBitmap = false
 
@@ -1482,7 +1484,8 @@ func TestParser(t *testing.T) {
 	}
 
 	// set field 120 value to empty string
-	iso.Data.(*TestISO).F120.Value = ""
+	f120 := Lllnumeric("")
+	iso.Data.(*TestISO).F120 = &f120
 
 	iso.SecondBitmap = false
 
@@ -1644,6 +1647,17 @@ func TestParseFieldsErrors(t *testing.T) {
 	_, err = iso.Bytes()
 
 	assert.EqualError(t, err, "Critical error:data must be a struct")
+}
+
+func TestJSONMarshal(t *testing.T) {
+	m := newDataIso()
+	m.F52.Value = []byte("abcxyz123")
+	s, err := json.Marshal(m)
+	if err != nil {
+		t.Fatalf("Error: could not JSON marshal ISO message because %v", err)
+	}
+	expectedJSON := `{"F2":"","F3":"","F4":"","F7":"","F11":"","F12":"","F13":"","F14":"","F19":"","F22":"","F25":"","F32":"","F35":"","F37":"","F39":"","F41":"","F42":"","F43":"","F49":"","F52":"YWJjeHl6MTIz","F53":"","F120":""}`
+	assert.Equal(t, expectedJSON, string(s))
 }
 
 // newDataIso creates DataIso
