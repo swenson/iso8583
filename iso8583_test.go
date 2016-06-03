@@ -2,8 +2,9 @@ package iso8583
 
 import (
 	"bytes"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type TestISO struct {
@@ -127,12 +128,12 @@ func TestDecode(t *testing.T) {
 	resultFields := iso.Data.(*TestISO)
 
 	// check BCD numeric values length
-	assert.Equal(t, 3, len(resultFields.F19.Value))
-	assert.Equal(t, 3, len(resultFields.F49.Value))
+	assert.Equal(t, 3, len(*resultFields.F19))
+	assert.Equal(t, 3, len(*resultFields.F49))
 
 	// check values for BCD (lBCD) and rBCD
-	assert.Equal(t, "643", resultFields.F19.Value)
-	assert.Equal(t, "643", resultFields.F49.Value)
+	assert.Equal(t, "643", string(*resultFields.F19))
+	assert.Equal(t, "643", string(*resultFields.F49))
 
 	var res []byte
 
@@ -140,7 +141,8 @@ func TestDecode(t *testing.T) {
 	iso.SecondBitmap = true
 
 	// before encode add "0" to left of F19 for testing rBCD encoding
-	iso.Data.(*TestISO).F19.Value = "0" + iso.Data.(*TestISO).F19.Value
+	n := Numeric("0" + string(*iso.Data.(*TestISO).F19))
+	iso.Data.(*TestISO).F19 = &n
 
 	// encode iso struct to bytes
 	res, err = iso.Bytes()
@@ -1449,12 +1451,12 @@ func TestParser(t *testing.T) {
 	resultFields := iso.Data.(*TestISO)
 
 	// check BCD numeric values length
-	assert.Equal(t, 3, len(resultFields.F19.Value))
-	assert.Equal(t, 3, len(resultFields.F49.Value))
+	assert.Equal(t, 3, len(*resultFields.F19))
+	assert.Equal(t, 3, len(*resultFields.F49))
 
 	// check values for BCD (lBCD) and rBCD
-	assert.Equal(t, "643", resultFields.F19.Value)
-	assert.Equal(t, "643", resultFields.F49.Value)
+	assert.Equal(t, "643", string(*resultFields.F19))
+	assert.Equal(t, "643", string(*resultFields.F49))
 
 	var res []byte
 
@@ -1462,7 +1464,8 @@ func TestParser(t *testing.T) {
 	iso.SecondBitmap = true
 
 	// before encode add "0" to left of F19 for testing rBCD encoding
-	iso.Data.(*TestISO).F19.Value = "0" + iso.Data.(*TestISO).F19.Value
+	n := Numeric("0" + string(*iso.Data.(*TestISO).F19))
+	iso.Data.(*TestISO).F19 = &n
 
 	// encode iso struct to bytes
 	res, err = iso.Bytes()

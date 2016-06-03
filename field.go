@@ -42,23 +42,22 @@ type Iso8583Type interface {
 // A Numeric contains numeric value only in fix length. It holds numeric
 // value as a string. Supportted encoder are ascii, bcd and rbcd. Length is
 // required for marshalling and unmarshalling.
-type Numeric struct {
-	Value string
-}
+type Numeric string
 
 // NewNumeric create new Numeric field
 func NewNumeric(val string) *Numeric {
-	return &Numeric{val}
+	n := Numeric(val)
+	return &n
 }
 
 // IsEmpty check Numeric field for empty value
 func (n *Numeric) IsEmpty() bool {
-	return len(n.Value) == 0
+	return len(string(*n)) == 0
 }
 
 // Bytes encode Numeric field to bytes
 func (n *Numeric) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
-	val := []byte(n.Value)
+	val := []byte(*n)
 	if length == -1 {
 		return nil, errors.New(ERR_MISSING_LENGTH)
 	}
@@ -101,20 +100,20 @@ func (n *Numeric) Load(raw []byte, encoder, lenEncoder, length int) (int, error)
 		if len(raw) < l {
 			return 0, errors.New(ERR_BAD_RAW)
 		}
-		n.Value = string(bcdl2Ascii(raw[:l], length))
+		*n = Numeric(string(bcdl2Ascii(raw[:l], length)))
 		return l, nil
 	case rBCD:
 		l := (length + 1) / 2
 		if len(raw) < l {
 			return 0, errors.New(ERR_BAD_RAW)
 		}
-		n.Value = string(bcdr2Ascii(raw[0:l], length))
+		*n = Numeric(string(bcdr2Ascii(raw[0:l], length)))
 		return l, nil
 	case ASCII:
 		if len(raw) < length {
 			return 0, errors.New(ERR_BAD_RAW)
 		}
-		n.Value = string(raw[:length])
+		*n = Numeric(string(raw[:length]))
 		return length, nil
 	default:
 		return 0, errors.New(ERR_INVALID_ENCODER)
