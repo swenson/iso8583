@@ -16,18 +16,19 @@ const (
 	rBCD
 )
 
+// Errors
 const (
-	ERR_INVALID_ENCODER        string = "invalid encoder"
-	ERR_INVALID_LENGTH_ENCODER string = "invalid length encoder"
-	ERR_INVALID_LENGTH_HEAD    string = "invalid length head"
-	ERR_MISSING_LENGTH         string = "missing length"
-	ERR_VALUE_TOO_LONG         string = "length of value is longer than definition; type=%s, def_len=%d, len=%d"
-	ERR_BAD_RAW                string = "bad raw data"
-	ERR_PARSE_LENGTH_FAILED    string = "parse length head failed"
+	ErrInvalidEncoder       string = "invalid encoder"
+	ErrInvalidLengthEncoder string = "invalid length encoder"
+	ErrInvalidLengthHead    string = "invalid length head"
+	ErrMissingLength        string = "missing length"
+	ErrValueTooLong         string = "length of value is longer than definition; type=%s, def_len=%d, len=%d"
+	ErrBadRaw               string = "bad raw data"
+	ErrParseLengthFailed    string = "parse length head failed"
 )
 
-// Iso8583Type interface for ISO 8583 fields
-type Iso8583Type interface {
+// Type interface for ISO 8583 fields
+type Type interface {
 	// Byte representation of current field.
 	Bytes(encoder, lenEncoder, length int) ([]byte, error)
 
@@ -59,7 +60,7 @@ func (n *Numeric) IsEmpty() bool {
 func (n *Numeric) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
 	val := []byte(*n)
 	if length == -1 {
-		return nil, errors.New(ERR_MISSING_LENGTH)
+		return nil, errors.New(ErrMissingLength)
 	}
 	// if encoder == rBCD then length can be, for example, 3,
 	// but value can be, for example, "0631" (after decode from rBCD, because BCD use 1 byte for 2 digits),
@@ -72,7 +73,7 @@ func (n *Numeric) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
 	}
 
 	if len(val) > length {
-		return nil, errors.New(fmt.Sprintf(ERR_VALUE_TOO_LONG, "Numeric", length, len(val)))
+		return nil, errors.New(fmt.Sprintf(ErrValueTooLong, "Numeric", length, len(val)))
 	}
 	if len(val) < length {
 		val = append([]byte(strings.Repeat("0", length-len(val))), val...)
@@ -85,38 +86,38 @@ func (n *Numeric) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
 	case ASCII:
 		return val, nil
 	default:
-		return nil, errors.New(ERR_INVALID_ENCODER)
+		return nil, errors.New(ErrInvalidEncoder)
 	}
 }
 
 // Load decode Numeric field from bytes
 func (n *Numeric) Load(raw []byte, encoder, lenEncoder, length int) (int, error) {
 	if length == -1 {
-		return 0, errors.New(ERR_MISSING_LENGTH)
+		return 0, errors.New(ErrMissingLength)
 	}
 	switch encoder {
 	case BCD:
 		l := (length + 1) / 2
 		if len(raw) < l {
-			return 0, errors.New(ERR_BAD_RAW)
+			return 0, errors.New(ErrBadRaw)
 		}
 		*n = Numeric(string(bcdl2Ascii(raw[:l], length)))
 		return l, nil
 	case rBCD:
 		l := (length + 1) / 2
 		if len(raw) < l {
-			return 0, errors.New(ERR_BAD_RAW)
+			return 0, errors.New(ErrBadRaw)
 		}
 		*n = Numeric(string(bcdr2Ascii(raw[0:l], length)))
 		return l, nil
 	case ASCII:
 		if len(raw) < length {
-			return 0, errors.New(ERR_BAD_RAW)
+			return 0, errors.New(ErrBadRaw)
 		}
 		*n = Numeric(string(raw[:length]))
 		return length, nil
 	default:
-		return 0, errors.New(ERR_INVALID_ENCODER)
+		return 0, errors.New(ErrInvalidEncoder)
 	}
 }
 
@@ -141,10 +142,10 @@ func (a *Alphanumeric) IsEmpty() bool {
 func (a *Alphanumeric) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
 	val := []byte(a.Value)
 	if length == -1 {
-		return nil, errors.New(ERR_MISSING_LENGTH)
+		return nil, errors.New(ErrMissingLength)
 	}
 	if len(val) > length {
-		return nil, errors.New(fmt.Sprintf(ERR_VALUE_TOO_LONG, "Alphanumeric", length, len(val)))
+		return nil, errors.New(fmt.Sprintf(ErrValueTooLong, "Alphanumeric", length, len(val)))
 	}
 	if len(val) < length {
 		val = append([]byte(strings.Repeat(" ", length-len(val))), val...)
@@ -155,10 +156,10 @@ func (a *Alphanumeric) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
 // Load decode Alphanumeric field from bytes
 func (a *Alphanumeric) Load(raw []byte, encoder, lenEncoder, length int) (int, error) {
 	if length == -1 {
-		return 0, errors.New(ERR_MISSING_LENGTH)
+		return 0, errors.New(ErrMissingLength)
 	}
 	if len(raw) < length {
-		return 0, errors.New(ERR_BAD_RAW)
+		return 0, errors.New(ErrBadRaw)
 	}
 	a.Value = string(raw[:length])
 	return length, nil
@@ -187,10 +188,10 @@ func (b *Binary) Bytes(encoder, lenEncoder, l int) ([]byte, error) {
 		length = b.FixLen
 	}
 	if length == -1 {
-		return nil, errors.New(ERR_MISSING_LENGTH)
+		return nil, errors.New(ErrMissingLength)
 	}
 	if len(b.Value) > length {
-		return nil, errors.New(fmt.Sprintf(ERR_VALUE_TOO_LONG, "Binary", length, len(b.Value)))
+		return nil, errors.New(fmt.Sprintf(ErrValueTooLong, "Binary", length, len(b.Value)))
 	}
 	if len(b.Value) < length {
 		return append(b.Value, make([]byte, length-len(b.Value))...), nil
@@ -201,10 +202,10 @@ func (b *Binary) Bytes(encoder, lenEncoder, l int) ([]byte, error) {
 // Load decode Binary field from bytes
 func (b *Binary) Load(raw []byte, encoder, lenEncoder, length int) (int, error) {
 	if length == -1 {
-		return 0, errors.New(ERR_MISSING_LENGTH)
+		return 0, errors.New(ErrMissingLength)
 	}
 	if len(raw) < length {
-		return 0, errors.New(ERR_BAD_RAW)
+		return 0, errors.New(ErrBadRaw)
 	}
 	b.Value = raw[:length]
 	b.FixLen = length
@@ -229,10 +230,10 @@ func (l *Llvar) IsEmpty() bool {
 // Bytes encode Llvar field to bytes
 func (l *Llvar) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
 	if length != -1 && len(l.Value) > length {
-		return nil, errors.New(fmt.Sprintf(ERR_VALUE_TOO_LONG, "Llvar", length, len(l.Value)))
+		return nil, errors.New(fmt.Sprintf(ErrValueTooLong, "Llvar", length, len(l.Value)))
 	}
 	if encoder != ASCII {
-		return nil, errors.New(ERR_INVALID_ENCODER)
+		return nil, errors.New(ErrInvalidEncoder)
 	}
 
 	lenStr := fmt.Sprintf("%02d", len(l.Value))
@@ -242,17 +243,17 @@ func (l *Llvar) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
 	case ASCII:
 		lenVal = contentLen
 		if len(lenVal) > 2 {
-			return nil, errors.New(ERR_INVALID_LENGTH_HEAD)
+			return nil, errors.New(ErrInvalidLengthHead)
 		}
 	case rBCD:
 		fallthrough
 	case BCD:
 		lenVal = rbcd(contentLen)
 		if len(lenVal) > 1 {
-			return nil, errors.New(ERR_INVALID_LENGTH_HEAD)
+			return nil, errors.New(ErrInvalidLengthHead)
 		}
 	default:
-		return nil, errors.New(ERR_INVALID_LENGTH_ENCODER)
+		return nil, errors.New(ErrInvalidLengthEncoder)
 	}
 	return append(lenVal, l.Value...), nil
 }
@@ -266,7 +267,7 @@ func (l *Llvar) Load(raw []byte, encoder, lenEncoder, length int) (read int, err
 		read = 2
 		contentLen, err = strconv.Atoi(string(raw[:read]))
 		if err != nil {
-			return 0, errors.New(ERR_PARSE_LENGTH_FAILED + ": " + string(raw[:2]))
+			return 0, errors.New(ErrParseLengthFailed + ": " + string(raw[:2]))
 		}
 	case rBCD:
 		fallthrough
@@ -274,19 +275,19 @@ func (l *Llvar) Load(raw []byte, encoder, lenEncoder, length int) (read int, err
 		read = 1
 		contentLen, err = strconv.Atoi(string(bcdr2Ascii(raw[:read], 2)))
 		if err != nil {
-			return 0, errors.New(ERR_PARSE_LENGTH_FAILED + ": " + string(raw[0]))
+			return 0, errors.New(ErrParseLengthFailed + ": " + string(raw[0]))
 		}
 	default:
-		return 0, errors.New(ERR_INVALID_LENGTH_ENCODER)
+		return 0, errors.New(ErrInvalidLengthEncoder)
 	}
 	if len(raw) < (read + contentLen) {
-		return 0, errors.New(ERR_BAD_RAW)
+		return 0, errors.New(ErrBadRaw)
 	}
 	// parse body:
 	l.Value = raw[read : read+contentLen]
 	read += contentLen
 	if encoder != ASCII {
-		return 0, errors.New(ERR_INVALID_ENCODER)
+		return 0, errors.New(ErrInvalidEncoder)
 	}
 
 	return read, nil
@@ -313,7 +314,7 @@ func (l *Llnumeric) IsEmpty() bool {
 func (l *Llnumeric) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
 	raw := []byte(l.Value)
 	if length != -1 && len(raw) > length {
-		return nil, errors.New(fmt.Sprintf(ERR_VALUE_TOO_LONG, "Llnumeric", length, len(raw)))
+		return nil, errors.New(fmt.Sprintf(ErrValueTooLong, "Llnumeric", length, len(raw)))
 	}
 
 	val := raw
@@ -324,7 +325,7 @@ func (l *Llnumeric) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
 	case rBCD:
 		val = rbcd(raw)
 	default:
-		return nil, errors.New(ERR_INVALID_ENCODER)
+		return nil, errors.New(ErrInvalidEncoder)
 	}
 
 	lenStr := fmt.Sprintf("%02d", len(raw)) // length of digital characters
@@ -334,17 +335,17 @@ func (l *Llnumeric) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
 	case ASCII:
 		lenVal = contentLen
 		if len(lenVal) > 2 {
-			return nil, errors.New(ERR_INVALID_LENGTH_HEAD)
+			return nil, errors.New(ErrInvalidLengthHead)
 		}
 	case rBCD:
 		fallthrough
 	case BCD:
 		lenVal = rbcd(contentLen)
 		if len(lenVal) > 1 || len(contentLen) > 3 {
-			return nil, errors.New(ERR_INVALID_LENGTH_HEAD)
+			return nil, errors.New(ErrInvalidLengthHead)
 		}
 	default:
-		return nil, errors.New(ERR_INVALID_LENGTH_ENCODER)
+		return nil, errors.New(ErrInvalidLengthEncoder)
 	}
 	return append(lenVal, val...), nil
 }
@@ -358,7 +359,7 @@ func (l *Llnumeric) Load(raw []byte, encoder, lenEncoder, length int) (read int,
 		read = 2
 		contentLen, err = strconv.Atoi(string(raw[:read]))
 		if err != nil {
-			return 0, errors.New(ERR_PARSE_LENGTH_FAILED + ": " + string(raw[:2]))
+			return 0, errors.New(ErrParseLengthFailed + ": " + string(raw[:2]))
 		}
 	case rBCD:
 		fallthrough
@@ -366,17 +367,17 @@ func (l *Llnumeric) Load(raw []byte, encoder, lenEncoder, length int) (read int,
 		read = 1
 		contentLen, err = strconv.Atoi(string(bcdr2Ascii(raw[:read], 2)))
 		if err != nil {
-			return 0, errors.New(ERR_PARSE_LENGTH_FAILED + ": " + string(raw[0]))
+			return 0, errors.New(ErrParseLengthFailed + ": " + string(raw[0]))
 		}
 	default:
-		return 0, errors.New(ERR_INVALID_LENGTH_ENCODER)
+		return 0, errors.New(ErrInvalidLengthEncoder)
 	}
 
 	// parse body:
 	switch encoder {
 	case ASCII:
 		if len(raw) < (read + contentLen) {
-			return 0, errors.New(ERR_BAD_RAW)
+			return 0, errors.New(ErrBadRaw)
 		}
 		l.Value = string(raw[read : read+contentLen])
 		read += contentLen
@@ -385,12 +386,12 @@ func (l *Llnumeric) Load(raw []byte, encoder, lenEncoder, length int) (read int,
 	case BCD:
 		bcdLen := (contentLen + 1) / 2
 		if len(raw) < (read + bcdLen) {
-			return 0, errors.New(ERR_BAD_RAW)
+			return 0, errors.New(ErrBadRaw)
 		}
 		l.Value = string(bcdl2Ascii(raw[read:read+bcdLen], contentLen))
 		read += bcdLen
 	default:
-		return 0, errors.New(ERR_INVALID_ENCODER)
+		return 0, errors.New(ErrInvalidEncoder)
 	}
 	return read, nil
 }
@@ -413,10 +414,10 @@ func (l *Lllvar) IsEmpty() bool {
 // Bytes encode Lllvar field to bytes
 func (l *Lllvar) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
 	if length != -1 && len(l.Value) > length {
-		return nil, errors.New(fmt.Sprintf(ERR_VALUE_TOO_LONG, "Lllvar", length, len(l.Value)))
+		return nil, errors.New(fmt.Sprintf(ErrValueTooLong, "Lllvar", length, len(l.Value)))
 	}
 	if encoder != ASCII {
-		return nil, errors.New(ERR_INVALID_ENCODER)
+		return nil, errors.New(ErrInvalidEncoder)
 	}
 
 	lenStr := fmt.Sprintf("%03d", len(l.Value))
@@ -426,17 +427,17 @@ func (l *Lllvar) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
 	case ASCII:
 		lenVal = contentLen
 		if len(lenVal) > 3 {
-			return nil, errors.New(ERR_INVALID_LENGTH_HEAD)
+			return nil, errors.New(ErrInvalidLengthHead)
 		}
 	case rBCD:
 		fallthrough
 	case BCD:
 		lenVal = rbcd(contentLen)
 		if len(lenVal) > 2 || len(contentLen) > 3 {
-			return nil, errors.New(ERR_INVALID_LENGTH_HEAD)
+			return nil, errors.New(ErrInvalidLengthHead)
 		}
 	default:
-		return nil, errors.New(ERR_INVALID_LENGTH_ENCODER)
+		return nil, errors.New(ErrInvalidLengthEncoder)
 	}
 	return append(lenVal, l.Value...), nil
 }
@@ -450,7 +451,7 @@ func (l *Lllvar) Load(raw []byte, encoder, lenEncoder, length int) (read int, er
 		read = 3
 		contentLen, err = strconv.Atoi(string(raw[:read]))
 		if err != nil {
-			return 0, errors.New(ERR_PARSE_LENGTH_FAILED + ": " + string(raw[:3]))
+			return 0, errors.New(ErrParseLengthFailed + ": " + string(raw[:3]))
 		}
 	case rBCD:
 		fallthrough
@@ -458,19 +459,19 @@ func (l *Lllvar) Load(raw []byte, encoder, lenEncoder, length int) (read int, er
 		read = 2
 		contentLen, err = strconv.Atoi(string(bcdr2Ascii(raw[:read], 3)))
 		if err != nil {
-			return 0, errors.New(ERR_PARSE_LENGTH_FAILED + ": " + string(raw[:2]))
+			return 0, errors.New(ErrParseLengthFailed + ": " + string(raw[:2]))
 		}
 	default:
-		return 0, errors.New(ERR_INVALID_LENGTH_ENCODER)
+		return 0, errors.New(ErrInvalidLengthEncoder)
 	}
 	if len(raw) < (read + contentLen) {
-		return 0, errors.New(ERR_BAD_RAW)
+		return 0, errors.New(ErrBadRaw)
 	}
 	// parse body:
 	l.Value = raw[read : read+contentLen]
 	read += contentLen
 	if encoder != ASCII {
-		return 0, errors.New(ERR_INVALID_ENCODER)
+		return 0, errors.New(ErrInvalidEncoder)
 	}
 
 	return read, nil
@@ -497,7 +498,7 @@ func (l *Lllnumeric) IsEmpty() bool {
 func (l *Lllnumeric) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
 	raw := []byte(l.Value)
 	if length != -1 && len(raw) > length {
-		return nil, errors.New(fmt.Sprintf(ERR_VALUE_TOO_LONG, "Lllnumeric", length, len(raw)))
+		return nil, errors.New(fmt.Sprintf(ErrValueTooLong, "Lllnumeric", length, len(raw)))
 	}
 
 	val := raw
@@ -508,7 +509,7 @@ func (l *Lllnumeric) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
 	case rBCD:
 		val = rbcd(raw)
 	default:
-		return nil, errors.New(ERR_INVALID_ENCODER)
+		return nil, errors.New(ErrInvalidEncoder)
 	}
 
 	lenStr := fmt.Sprintf("%03d", len(raw)) // length of digital characters
@@ -518,17 +519,17 @@ func (l *Lllnumeric) Bytes(encoder, lenEncoder, length int) ([]byte, error) {
 	case ASCII:
 		lenVal = contentLen
 		if len(lenVal) > 3 {
-			return nil, errors.New(ERR_INVALID_LENGTH_HEAD)
+			return nil, errors.New(ErrInvalidLengthHead)
 		}
 	case rBCD:
 		fallthrough
 	case BCD:
 		lenVal = rbcd(contentLen)
 		if len(lenVal) > 2 || len(contentLen) > 3 {
-			return nil, errors.New(ERR_INVALID_LENGTH_HEAD)
+			return nil, errors.New(ErrInvalidLengthHead)
 		}
 	default:
-		return nil, errors.New(ERR_INVALID_LENGTH_ENCODER)
+		return nil, errors.New(ErrInvalidLengthEncoder)
 	}
 	return append(lenVal, val...), nil
 }
@@ -542,7 +543,7 @@ func (l *Lllnumeric) Load(raw []byte, encoder, lenEncoder, length int) (read int
 		read = 3
 		contentLen, err = strconv.Atoi(string(raw[:read]))
 		if err != nil {
-			return 0, errors.New(ERR_PARSE_LENGTH_FAILED + ": " + string(raw[:3]))
+			return 0, errors.New(ErrParseLengthFailed + ": " + string(raw[:3]))
 		}
 	case rBCD:
 		fallthrough
@@ -550,17 +551,17 @@ func (l *Lllnumeric) Load(raw []byte, encoder, lenEncoder, length int) (read int
 		read = 2
 		contentLen, err = strconv.Atoi(string(bcdr2Ascii(raw[:read], 2)))
 		if err != nil {
-			return 0, errors.New(ERR_PARSE_LENGTH_FAILED + ": " + string(raw[:2]))
+			return 0, errors.New(ErrParseLengthFailed + ": " + string(raw[:2]))
 		}
 	default:
-		return 0, errors.New(ERR_INVALID_LENGTH_ENCODER)
+		return 0, errors.New(ErrInvalidLengthEncoder)
 	}
 
 	// parse body:
 	switch encoder {
 	case ASCII:
 		if len(raw) < (read + contentLen) {
-			return 0, errors.New(ERR_BAD_RAW)
+			return 0, errors.New(ErrBadRaw)
 		}
 		l.Value = string(raw[read : read+contentLen])
 		read += contentLen
@@ -569,12 +570,12 @@ func (l *Lllnumeric) Load(raw []byte, encoder, lenEncoder, length int) (read int
 	case BCD:
 		bcdLen := (contentLen + 1) / 2
 		if len(raw) < (read + bcdLen) {
-			return 0, errors.New(ERR_BAD_RAW)
+			return 0, errors.New(ErrBadRaw)
 		}
 		l.Value = string(bcdl2Ascii(raw[read:read+bcdLen], contentLen))
 		read += bcdLen
 	default:
-		return 0, errors.New(ERR_INVALID_ENCODER)
+		return 0, errors.New(ErrInvalidEncoder)
 	}
 	return read, nil
 }

@@ -9,9 +9,12 @@ import (
 )
 
 const (
-	TAG_FIELD  string = "field"
-	TAG_ENCODE string = "encode"
-	TAG_LENGTH string = "length"
+	// TagField specifies which ISO 8583 field the struct member maps to.
+	TagField string = "field"
+	// TagEncode changes the encoding of an ISO 8583 field.
+	TagEncode string = "encode"
+	// TagLength specifies the length of an ISO 8583 field.
+	TagLength string = "length"
 )
 
 type fieldInfo struct {
@@ -19,7 +22,7 @@ type fieldInfo struct {
 	Encode    int
 	LenEncode int
 	Length    int
-	Field     Iso8583Type
+	Field     Type
 }
 
 // Message is structure for ISO 8583 message encode and decode
@@ -133,18 +136,18 @@ func parseFields(msg interface{}) map[int]*fieldInfo {
 		}
 
 		sf := v.Type().Field(i)
-		if sf.Tag == "" || sf.Tag.Get(TAG_FIELD) == "" {
+		if sf.Tag == "" || sf.Tag.Get(TagField) == "" {
 			continue
 		}
 
-		index, err := strconv.Atoi(sf.Tag.Get(TAG_FIELD))
+		index, err := strconv.Atoi(sf.Tag.Get(TagField))
 		if err != nil {
 			panic("value of field must be numeric")
 		}
 
 		encode := 0
 		lenEncode := 0
-		if raw := sf.Tag.Get(TAG_ENCODE); raw != "" {
+		if raw := sf.Tag.Get(TagEncode); raw != "" {
 			enc := strings.Split(raw, ",")
 			if len(enc) == 2 {
 				lenEncode = parseEncodeStr(enc[0])
@@ -155,14 +158,14 @@ func parseFields(msg interface{}) map[int]*fieldInfo {
 		}
 
 		length := -1
-		if l := sf.Tag.Get(TAG_LENGTH); l != "" {
+		if l := sf.Tag.Get(TagLength); l != "" {
 			length, err = strconv.Atoi(l)
 			if err != nil {
 				panic("value of length must be numeric")
 			}
 		}
 
-		field, ok := v.Field(i).Interface().(Iso8583Type)
+		field, ok := v.Field(i).Interface().(Type)
 		if !ok {
 			panic("field must be Iso8583Type")
 		}
