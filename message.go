@@ -15,14 +15,20 @@ const (
 	TagEncode string = "encode"
 	// TagLength specifies the length of an ISO 8583 field.
 	TagLength string = "length"
+	// TagIso is the tag for a plain string encoding the ISO8583 encoding information
+	TagIso string = "iso8583"
 )
 
 type fieldInfo struct {
-	Index     int
-	Encode    int
-	LenEncode int
-	Length    int
-	Field     Type
+	Kind         string
+	Value        string
+	ByteValue    []byte
+	Index        int
+	Encode       int
+	LenEncode    int
+	Length       int
+	LengthFormat string
+	Field        Type
 }
 
 // Message is structure for ISO 8583 message encode and decode
@@ -78,6 +84,35 @@ func (m *Message) Bytes() (ret []byte, err error) {
 			}
 
 			if info, ok := fields[i]; ok {
+
+				if info.Kind != "" {
+					switch info.Kind {
+					case "numeric":
+						if info.LengthFormat == "" {
+							info.Field = NewNumeric(info.Value)
+						} else if info.LengthFormat == "ll" {
+							info.Field = NewLlnumeric(info.Value)
+						} else if info.LengthFormat == "lll" {
+							info.Field = NewLllnumeric(info.Value)
+						} else {
+							panic("Unknown length format: %s" + info.LengthFormat)
+						}
+					case "alphanum":
+						info.Field = NewAlphanumeric(info.Value)
+					case "binary":
+						if info.LengthFormat == "" {
+							info.Field = NewBinary(info.ByteValue)
+						} else if info.LengthFormat == "ll" {
+							info.Field = NewLllvar(info.ByteValue)
+						} else if info.LengthFormat == "lll" {
+							info.Field = NewLllvar(info.ByteValue)
+						} else {
+							panic("Unknown length format: %s" + info.LengthFormat)
+						}
+					default:
+						panic("Unknown kind: " + info.Kind)
+					}
+				}
 
 				// if field is empty, then we can't add it to bitmap
 				if info.Field.IsEmpty() {
@@ -136,7 +171,63 @@ func parseFields(msg interface{}) map[int]*fieldInfo {
 		}
 
 		sf := v.Type().Field(i)
-		if sf.Tag == "" || sf.Tag.Get(TagField) == "" {
+
+		if sf.Tag == "" {
+			continue
+		}
+		_, isString := v.Field(i).Interface().(string)
+		_, isByteArray := v.Field(i).Interface().([]byte)
+		if sf.Tag.Get(TagIso) != "" && (isString || isByteArray) {
+			// process new tag
+			info := sf.Tag.Get(TagIso)
+			parts := strings.Split(info, ",")
+			if len(parts) < 2 {
+				panic("iso8583 tag must have at least two parts")
+			}
+			kind := parts[0]
+			field := 0
+			length := -1
+			lengthFormat := ""
+			for _, part := range parts[1:] {
+				sides := strings.Split(part, "=")
+				if len(sides) != 2 {
+					panic("iso8583 tag parts must have be of the form a=b")
+				}
+				lhs, rhs := sides[0], sides[1]
+				var err error
+				switch lhs {
+				case "field":
+					field, err = strconv.Atoi(rhs)
+					if err != nil {
+						panic(err)
+					}
+				case "length":
+					length, err = strconv.Atoi(rhs)
+					if err != nil {
+						panic(err)
+					}
+				case "length_format":
+					lengthFormat = rhs
+				default:
+					panic("Unknown field: " + lhs)
+				}
+			}
+
+			fields[field] = &fieldInfo{
+				Kind:         kind,
+				Index:        field,
+				Length:       length,
+				LengthFormat: lengthFormat,
+			}
+			if kind == "binary" {
+				fields[field].ByteValue = v.Field(i).Bytes()
+			} else {
+				fields[field].Value = v.Field(i).String()
+			}
+			continue
+		}
+
+		if sf.Tag.Get(TagField) == "" {
 			continue
 		}
 
@@ -169,7 +260,13 @@ func parseFields(msg interface{}) map[int]*fieldInfo {
 		if !ok {
 			panic("field must be Iso8583Type")
 		}
-		fields[index] = &fieldInfo{index, encode, lenEncode, length, field}
+		fields[index] = &fieldInfo{
+			Index:     index,
+			Encode:    encode,
+			LenEncode: lenEncode,
+			Length:    length,
+			Field:     field,
+		}
 	}
 	return fields
 }
